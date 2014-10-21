@@ -19,57 +19,68 @@ banksize $4000
 banks 1
 .endro
 
-.define BUTTONS_PRESSED $4002 ; 1 byte, --21RLDU
-.define MEMORY_DUMP_CURRENT_ADDRESS $4004 ; 2 bytes, pointer to RAM being dumped
-.define MEMORY_DUMP_ADDRESS_DELTA $4006 ; 2 bytes, delta applied during memory dump scrolling
-.define HEX_ENTRY_XY $4009 ; 2 bytes, x/y
-.define CURRENT_CODE_VALUE_POINTER $400b ; 2 bytes: pointer to current code's value
-.define HEX_ENTRY_VALUE $400d ; 1 byte, the value being entered
 
-.define CODE_ENTRY_CURRENT_INDEX $400e ; 1 byte: index of current code
-.define CODE_ENTRY_CURRENT_CHAR $400f ; 1 byte: index of currently edited char in current code
-
-.define MENU_WAIT_FRAMES $4010 ; 1 byte, # of frames to wait before the menu reacts
-.define CODE_1 $4011 ; 4 bytes
-.define CODE_2 $4015 ; 4 bytes
-.define CODE_3 $4019 ; 4 bytes
-.define CODE_4 $401d ; 4 bytes
-; $4021 ...
-.define TRAINER_CHANGE_TYPE $4050 ; 1 byte: see "Values for TRAINER_CHANGE_TYPE" below
-.define LIST_CODES_CURRENT_CODES_POINTER $4051 ; 2 bytes: pointer into TRAINER_CODES while drawing current codes
-.define TIMER_DELTA_AMOUNT $4053 ; 1 byte: delta absolute amount (BCD)
-.define TIMER_DELTA_SIGN $4054 ; 1 byte: delta direction: zero = more, nonzer = less
-.define TIMER_LAST_DELTA_HEX $4055 ; 1 byte: used during code checking
-.define TIMER_DELTA_HEX $4056 ; 1 byte: delta signed amount (hex)
-.define TIMER_LAST_DELTA_BCD $4057 ; 1 byte: used during code checking
-.define TIMER_DELTA_BCD $4058 ; 1 byte: delta signed amount (BCD)
-
-.define GENERATED_CODE $4079 ; up to 25 bytes
-; $4092 ...
-.define DRAW_XY $4097 ; 2 bytes
-.define CURSOR_TILE $4099 ; 1 byte
-.define CURSOR_X $409a    ; 1 byte, tile space
-.define CURSOR_Y $409b    ; 1 byte, tile space
-.define INITIALISED_MARKER $409c ; 2 bytes, checked for INITIALISED_MARKER_VALUE
-; $409d
-.define TRAINER_MODE $409e ; 1 byte, 0 = inactive, else which trainer is active - see "Values for TRAINER_MODE" below
-
-.define TRAINER_CURRENT_CODES_POINTER $409f ; 2 bytes: last trainer code written
-.define TRAINER_CURRENT_SRAM_POINTER $40a1 ; 2 bytes: last place we looked
-.define TRAINER_VALUES_TO_LOOK_FOR $40a3 ; 6 (or more?) bytes
-
-.define STACK_TOP $43ff
-.define TRAINER_CODES $4400 ; Holds 4-byte PAR codes.
-; The first byte is used for housekeeping - the high bit indicates whether the slot is used,
-; the remaining seven bits are used for status info:
-; - Known value (lives): index of which representation is used (BCD/literal, +1/0/-1)
-; - Start/change: 0 for "same as start", 1 for "changed". This is updated, along with the final byte, after each "train".
-; - Timer: the BCD delta from the original value, plus $15. This is updated, along with the final byte, after each "train".
-; - Energy bar: always 0
-; The next two bytes are the address (little-endian); the last byte is the value to write.
+; PAR RAM
+.define RAM_START $4000
 .define TRAINER_CODES_SIZE $1bff ; just under 8KB = <2K codes
+.enum RAM_START export
+  Unused1                          dsb 2
+  BUTTONS_PRESSED                  db      ; --21RLDU
+  Unused2                          dsb 1
+  MEMORY_DUMP_CURRENT_ADDRESS      dw      ; pointer to RAM being dumped
+  MEMORY_DUMP_ADDRESS_DELTA        dw      ; delta applied during memory dump scrolling
+  DRAW_LARGE_SCRATCH               db      ; used for holding delta between tile indices when drawing
+  HEX_ENTRY_XY                     dw      ; x/y
+  CURRENT_CODE_VALUE_POINTER       dw      ; pointer to current code's value
+  HEX_ENTRY_VALUE                  db      ; the value being entered
+  CODE_ENTRY_CURRENT_INDEX         db      ; index of current code
+  CODE_ENTRY_CURRENT_CHAR          db      ; index of currently edited char in current code
+  MENU_WAIT_FRAMES                 db      ; # of frames to wait before the menu reacts
+  CODE_1                           dsb 4
+  CODE_2                           dsb 4
+  CODE_3                           dsb 4
+  CODE_4                           dsb 4
+  CLEAR_CODE_DEBOUNCE              db      ; flag set at start of button-holding wait
+  Unused3                          dsb 46
+  TRAINER_CHANGE_TYPE              db      ; see "Values for TRAINER_CHANGE_TYPE" below
+  LIST_CODES_CURRENT_CODES_POINTER dw      ; pointer into TRAINER_CODES while drawing current codes
+  TIMER_DELTA_AMOUNT               db      ; delta absolute amount (BCD)
+  TIMER_DELTA_SIGN                 db      ; delta direction: zero = more, nonzer = less
+  TIMER_LAST_DELTA_HEX             db      ; used during code checking
+  TIMER_DELTA_HEX                  db      ; delta signed amount (hex)
+  TIMER_LAST_DELTA_BCD             db      ; used during code checking
+  TIMER_DELTA_BCD                  db      ; delta signed amount (BCD)
+  LOST_TRAINER_POINTER_1           dw
+  LOST_TRAINER_POINTER_2           dw
+  Unused4                          dsb 28
+  GENERATED_CODE                   dsb 25
+  Unused5                          dsb 5
+  DRAW_XY                          dw
+  CURSOR_TILE                      db
+  CURSOR_X                         db      ; in tile space
+  CURSOR_Y                         db      ; in tile space
+  INITIALISED_MARKER               dw      ; checked for INITIALISED_MARKER_VALUE
+  TRAINER_MODE                     db      ; 0 = inactive, else which trainer is active - see "Values for TRAINER_MODE" below
+  TRAINER_CURRENT_CODES_POINTER    dw      ; last trainer code written
+  TRAINER_CURRENT_SRAM_POINTER     dw      ; last place we looked
+  TRAINER_VALUES_TO_LOOK_FOR       dw      ; in Lives mode only?
+  STACK_SPACE                      dsb 858 ; loads of room
+  STACK_TOP                        db      ; unsed byte?
+  TRAINER_CODES                    dsb TRAINER_CODES_SIZE ; Holds 4-byte PAR codes...
+  ; The first byte is used for housekeeping - the high bit indicates whether the slot is used,
+  ; the remaining seven bits are used for status info:
+  ; - Known value (lives): index of which representation is used (BCD/literal, +1/0/-1)
+  ; - Start/change: 0 for "same as start", 1 for "changed". This is updated, along with the final byte, after each "train".
+  ; - Timer: the BCD delta from the original value, plus $15. This is updated, along with the final byte, after each "train".
+  ; - Energy bar: always 0
+  ; The next two bytes are the address (little-endian); the last byte is the value to write.
+  TRAINER_CODES_END                .db
+  RAM_END                          .db
+.ende
+
 
 .define SRAM_CODE_BOOTGAME $d400
+.define SRAM_DATA_NOTUSED $c700
 
 .define STRING_TERMINATOR $1a
 .define INITIALISED_MARKER_VALUE $5742
@@ -324,7 +335,7 @@ MainMenu: ; 0258
   jp MenuHandler
 
 ; Unused jump to flashing border mode
-fn0280:
+; 0280
   jp FlashBorder
 
 MenuData_NotTraining:
@@ -373,7 +384,8 @@ Text_MainMenu:
 .ends
 
 .section "Unused 2" force
-fn0375: ; unused - infinite loop with no interrupts
+; 0375 unused - infinite loop with no interrupts
+LockUp:
 -:di
   jp -
 .ends
@@ -411,46 +423,47 @@ WaitForButtonPress: ; 0393
   ret
 .ends
 
-.section "Lost trainer?" force
-fn03af: ;03af
+.section "Lost trainer" force
+; Similar to other trainers, seems confusing though
+LostTrainer: ;03af
   ld hl,0
   ld (HEX_ENTRY_XY),hl ; ?
   ld hl,TRAINER_CODES - 4
-  ld ($4059),hl        ; ?
+  ld (LOST_TRAINER_POINTER_1),hl        ; ?
 
 --:
   ld hl,(HEX_ENTRY_XY) ; Increment counter
   inc hl
   ld (HEX_ENTRY_XY),hl
 
-  ld hl,($4059) ; Add four to pointer
+  ld hl,(LOST_TRAINER_POINTER_1) ; Add four to pointer
   ld bc,4
   add hl,bc
-  ld ($4059),hl
+  ld (LOST_TRAINER_POINTER_1),hl
 
-  ld bc,$5ffe   ; End point
+  ld bc,TRAINER_CODES_END - 1 ; End point
   or a          ; clear carry
   sbc hl,bc     ; subtract
   jp nc,_end    ; done if we got that far
 
-  ld hl,($4059) ; Get pointer back
+  ld hl,(LOST_TRAINER_POINTER_1) ; Get pointer back
   bit 7,(hl)    ; High bit zero -> loop
   jr z,--
 
   ld hl,TRAINER_CODES ; Write this
-  ld ($405b),hl ; To here
+  ld (LOST_TRAINER_POINTER_2),hl ; To here
 
--:ld hl,($405b) ; Read it back
+-:ld hl,(LOST_TRAINER_POINTER_2) ; Read it back
   inc hl        ; Look up 1 byte further
   bit 7,(hl)    ; Check high bit
   jr nz,+       ; set -> skip?
 
-  ld hl,($4059) ; bc = *p1 + 1
+  ld hl,(LOST_TRAINER_POINTER_1) ; bc = *p1 + 1
   inc hl
   ld c,(hl)
   inc hl
   ld b,(hl)
-  ld hl,($405b) ; de = *p2 + 1
+  ld hl,(LOST_TRAINER_POINTER_2) ; de = *p2 + 1
   inc hl
   ld e,(hl)
   inc hl
@@ -500,11 +513,11 @@ fn03af: ;03af
   jp --         ; and loop
 
 +:ld hl,4       ; add 4 to ???
-  ld bc,($405b)
+  ld bc,(LOST_TRAINER_POINTER_2)
   add hl,bc
-  ld ($405b),hl
+  ld (LOST_TRAINER_POINTER_2),hl
 
-  ld bc,$4428   ; subtract from hl
+  ld bc,TRAINER_CODES + 40   ; subtract from hl
   or a
   sbc hl,bc
   jr nc,-       ; if hl was bigger, go there
@@ -558,7 +571,7 @@ _NextCode:
   ld (LIST_CODES_CURRENT_CODES_POINTER),hl
 
   xor a            ; Check for end
-  ld de,$5ffe
+  ld de,TRAINER_CODES_END - 1
   sbc hl,de
   jr nc,_EndOfCodes
 
@@ -613,9 +626,9 @@ ClearTrainer: ; 0556
   jp MainMenu
 .ends
 
-.section "Unused? Looks like some left-over bits" force
-fn055d: ; $055d
-  ld hl,$4428 ; Somewhere past the start?
+.section "More of the lost trainer?" force
+LostTrainerPart2: ; $055d
+  ld hl,TRAINER_CODES + 40 ; Code slot 10
   ld (LIST_CODES_CURRENT_CODES_POINTER),hl
   bit 7,(hl)
   jr z,+        ; Do-nothing jump
@@ -623,17 +636,17 @@ fn055d: ; $055d
   ld de,4
   add hl,de
   ld (LIST_CODES_CURRENT_CODES_POINTER),hl ; Check for end
-  ld de,$5ffe
+  ld de,TRAINER_CODES_END - 1
   xor a
   sbc hl,de
   ret                                      ; Premature end?
 .ends
 
-.section "Blank PAR RAM - unused?" force
+.section "Blank PAR RAM - unused" force
 BlankDeviceRAM: ; 0578
-  ld hl,$4000
-  ld de,$4001
-  ld bc,$1ffe
+  ld hl,RAM_START
+  ld de,RAM_START + 1
+  ld bc,RAM_END - RAM_START - 1 ; Misses the last byte
   ld (hl),0
   ldir
   ret
@@ -793,7 +806,7 @@ StartChangeTechniqueConfirmStartValue: ; 0969
   domenu 0, 0, Text_StartChangeTechniqueConfirmStartValue, MenuData_StartChangeTechniqueConfirmStartValue
 
 ; 0984
-  jp MainMenu ; Unused?
+  jp MainMenu ; Unused
 
 Text_StartChangeTechniqueConfirmStartValue: ; 0987
 .db "  You should start this trainer", NEWLINE
@@ -850,7 +863,7 @@ _Loop:
 +:ld l,a
   ld (TRAINER_CURRENT_CODES_POINTER),hl
 
-  ld bc,$5ffa    ; Check for reaching the end
+  ld bc,TRAINER_CODES_END - 5    ; Check for reaching the end
   xor a
   sbc hl,bc
   jr nc,_StopSearching
@@ -899,7 +912,7 @@ EnergyBarTechniqueConfirmStartValue: ; 0add
   domenu 0, 0, Text_EnergyBarTechniqueConfirmStartValue, MenuData_EnergyBarTechniqueConfirmStartValue
 
 ; 0af8
-  jp MainMenu ; unused?
+  jp MainMenu ; unused
 
 Text_EnergyBarTechniqueConfirmStartValue: ; 0afb
 .db "  You should start this trainer", NEWLINE
@@ -950,7 +963,7 @@ TimerTechniqueConfirmStartValue: ; 0c0e
   call ClearCodes
   domenu 0, 0, Text_TimerTechniqueConfirmStartValue, MenuData_TimerTechniqueConfirmStartValue
 
-  jp MainMenu ; unused?
+  jp MainMenu ; unused
 
 Text_TimerTechniqueConfirmStartValue: ; 0c2c
 .db "  Remember all future values", NEWLINE
@@ -1005,7 +1018,7 @@ _Loop:
 +:ld l,a
   ld (TRAINER_CURRENT_CODES_POINTER),hl
 
-  ld bc,$5ffa           ; End point?
+  ld bc,TRAINER_CODES_END - 5 ; End point
   xor a
   sbc hl,bc
   jr nc,_StopSearching  ; If so, stop looking
@@ -1067,7 +1080,7 @@ _Loop:
 +:ld l,a
   ld (TRAINER_CURRENT_CODES_POINTER),hl
 
-  ld bc,$5ffa    ; Check for reaching the end
+  ld bc,TRAINER_CODES_END - 5 ; Check for reaching the end
   xor a
   sbc hl,bc
   jr nc,_StopSearching
@@ -1158,7 +1171,7 @@ _Loop:
 +:ld l,a
   ld (TRAINER_CURRENT_CODES_POINTER),hl
 
-  ld bc,$5ffa           ; End point?
+  ld bc,TRAINER_CODES_END - 5 ; End point
   xor a
   sbc hl,bc
   jr nc,_StopSearching  ; If so, stop looking
@@ -1301,7 +1314,7 @@ _Loop:
   ld (TRAINER_CURRENT_CODES_POINTER),hl
 
   ; Check for reaching the end
-  ld de,$5ffe
+  ld de,TRAINER_CODES_END - 1
   xor a
   sbc hl,de
   jp nc,_StopSearching
@@ -1437,7 +1450,7 @@ _Loop:
   ld (TRAINER_CURRENT_CODES_POINTER),hl
 
   ; Check for reaching the end
-  ld de,$5ffe
+  ld de,TRAINER_CODES_END - 1
   xor a
   sbc hl,de
   jp nc,_StopSearching
@@ -1727,7 +1740,7 @@ _Loop:
   ld (TRAINER_CURRENT_CODES_POINTER),hl
 
   ; Check for reaching the end
-  ld de,$5ffe
+  ld de,TRAINER_CODES_END - 1
   xor a
   sbc hl,de
   jp nc,_StopSearching
@@ -1817,7 +1830,7 @@ _Loop:
 +:ld l,a
   ld (TRAINER_CURRENT_CODES_POINTER),hl
 
-  ld de,$5ffe           ; End point? Different from in SearchForMatches_LivesTechnique
+  ld de,TRAINER_CODES_END - 1
   xor a
   sbc hl,de
   jr nc,_StopSearching
@@ -2058,19 +2071,19 @@ _Loop: ; 1633
   jr nz,++
 
 _ClearCode:
-  ld a,($4021)                     ; ?
+  ld a,(CLEAR_CODE_DEBOUNCE)       ; Check debounce flag - if zero (usually is), we want to wait...
   or a
   jr z,+
-  ld a,(CODE_ENTRY_CURRENT_INDEX)
+  ld a,(CODE_ENTRY_CURRENT_INDEX)  ; If the wait is up, we clear the code
   call ZeroCode
   xor a
-  ld ($4021),a
+  ld (CLEAR_CODE_DEBOUNCE),a
   ld a,16
   ld (MENU_WAIT_FRAMES),a
   jp _LoopEnd
 
-+:cpl                              ; ?
-  ld ($4021),a
++:cpl                              ; Set the flag to non-zero to signal the start of the wait
+  ld (CLEAR_CODE_DEBOUNCE),a
   jp _LoopEndWithPause
 
 ++:
@@ -2154,7 +2167,7 @@ ReturnToGame:
   jp ShowReturnToGameMenu
 
 +:xor a
-  ld ($4021),a                     ; ?
+  ld (CLEAR_CODE_DEBOUNCE),a
   jr _LoopEnd
 
 _LoopEndWithPause; ; 16fd
@@ -2403,8 +2416,8 @@ SlowRestart: ; 1879
   ldir        ; Copy
 
   ld hl,ContinueTrainer ; Source ??? Why copy this?
-  ld de,$c700 ; Dest
-  ld bc,$00dd ; Count (a lot!)
+  ld de,SRAM_DATA_NOTUSED ; Dest
+  ld bc,$00dd ; Count (a bunch of random functions that don't have relative jumps)
   ldir
 
   jp SRAM_CODE_BOOTGAME
@@ -2420,7 +2433,7 @@ FastRestart: ; $1898
   ldir        ; Copy
 
   ld hl,ContinueTrainer ; see above
-  ld de,$c700
+  ld de,SRAM_DATA_NOTUSED
   ld bc,$00dd
   ldir
 
@@ -2841,7 +2854,7 @@ DrawCode_3x3: ; 1b1d
 .section "Draw a large hex digit" force
 DrawHexChar_3x3: ; 1b85
   push de
-    ld ix,$4008  ; Pointer to a bit of scratch RAM
+    ld ix,DRAW_LARGE_SCRATCH ; Pointer to a bit of scratch RAM
     ld c,$5e     ; Tile index for start of big '0'
     ld (ix+0), 3 * 11 - 2 ; Delta to next row
     cp 10        ; A-F?
@@ -2902,7 +2915,7 @@ DrawHexChar_3x3: ; 1b85
 LoadTiles: ; 1bd3
   ld de, VRAM_WRITE | 0 ; VRAM address 0 - low tiles
   SetVRAMAddressToDE
-  ld bc, FontSize ; Count
+  ld bc, FontDataEnd - FontData ; Count
   ld hl, FontData ; Address
 
   ld a, c ; fix counter for multiples of 256
@@ -2944,7 +2957,7 @@ LoadTiles: ; 1bd3
   ret
 .ends
 
-.section "Flash border (unused?)" force
+.section "Flash border - unused" force
 ; Flash border forever
 FlashBorder: ; 1c10
   ld b,0
@@ -2974,9 +2987,9 @@ WaitForVBlank: ; $1c2f
   ret
 .ends
 
-.section "Unused" force
-fn1c35: ; 1c35
-  ; Writes tile c to VRAM in a column, b rows long (test pattern?)
+.section "Unused tile-drawing routines" force
+DrawTestPattern1: ; 1c35
+  ; Writes tile c to VRAM in a column, b rows long (test pattern)
   ld a,c             ; a gets what was in c
   ld c,b             ; c gets what was in b
   ld b,a             ; Not used
@@ -2991,8 +3004,8 @@ fn1c35: ; 1c35
   jr nz, -
   ret
 
-fn1c45: ; 1c45
-  ; args: de = VRAM address, hl = pointer, a = bitmask?, bc = counter
+CopyToVRAMWithMask: ; 1c45
+  ; args: de = VRAM address, hl = pointer, a = bitmask, bc = counter
   ; Writes bc bytes from hl to VRAM address de; but uses a as a bitmask for each 4 bytes. 1 = use data, 0 = zero
   ld ($c201),a       ; Backup
   SetVRAMAddressToDE
@@ -3018,7 +3031,7 @@ fn1c45: ; 1c45
   jr nz,--
   ret
 
-fn1c64:
+SpriteTestPattern: ; 1c64
   ; y coords = 4, 10, 16, ... for 32 sprites
   ld de,VRAM_WRITE | SPRITE_TABLE
   SetVRAMAddressToDE
@@ -3044,8 +3057,8 @@ fn1c64:
   add a,6
   djnz -
   ret    
-  
-fn1c89:
+
+BlankFirstTile: ; 1c89
   ld de,VRAM_WRITE | 0 ; start of VRAM
   ld bc,32           ; one tile
   ld l,0             ; Value
@@ -3069,9 +3082,9 @@ ClearNameTable: ; 1c93
   ret
 .ends
 
-.section "Unused 3" force
+.section "Test pattern 2 - unused" force
 ; Test pattern - unused
-DrawTestPattern: ; 1cad
+DrawTestPattern2: ; 1cad
   ld de,NAME_TABLE | VRAM_WRITE
   ld bc,$0300 ; Count
   SetVRAMAddressToDE
@@ -3144,7 +3157,7 @@ DrawHexByte: ; 1ce9
   ret
 .ends
 
-.section "Draw hex word (unused?)" force
+.section "Draw hex word - unused" force
 DrawHexWord: ; 1d0c
   push af
   push hl
@@ -3184,10 +3197,11 @@ MapToGameAndBoot_Fast: ; 1d2f
 MapToGameAndBoot_FastEnd:
 .ends
 
-.section "Unused? RAM/ROM dump + boot game" force
+.section "RAM/ROM dump + boot game - unused" force
+MemoryDump:
   ld de,8            ; Movement delta
   ld (MEMORY_DUMP_ADDRESS_DELTA),de
-  ld hl,$4000        ; RAM dump start position
+  ld hl,RAM_START    ; RAM dump start position
   ld (MEMORY_DUMP_CURRENT_ADDRESS),hl
 
 _Loop:
@@ -3271,7 +3285,7 @@ _Loop:
 -: jp - ; Not sure what this is for
 .ends
 
-.section "Test data?" force
+.section "Test data - unused" force
 ; 1de7
 .db "The quick brown fox."
 .db STRING_TERMINATOR
@@ -3312,7 +3326,7 @@ PSGSilence: ; $1e14
 PSGSilenceEnd:
 .ends
 
-.section "Unused data?" force
+.section "Unused data" force
 ; 1e18
 .dw $0064, $0065, $0066, $0067, $0068, $0069, $006a
 .dw $008c, $008d, $008e, $008f, $0090, $0091
@@ -3329,24 +3343,27 @@ PaletteData: ; $1e3e
 PaletteDataEnd:
 .ends
 
-.section "BIOS data" force
+.section "BIOS data - unused" force
 .incbin "bios13fx.sms" skip $0fba read $446 ; ? TODO: look at BIOS disassembly
 .incbin "bios13fx.sms" skip $1704 read 69*8 + 12 ; Font + 12 extra (?) bytes
 .ends
 
-.section "Blank?" force
+.section "Blank" force
 .dsb 32 $ff
 .ends
 
 .section "Tiles" force
 FontData: ; $2518
-.incbin "sms-pro_action_replay.sms.font.bin" fsize FontSize
+.incbin "font-small.1bpp" read 94*8 ; 94 tiles
+.incbin "font-large-digits.1bpp" read (11*9 - 3)*8 ; 10 digits plus 1 space except at end
+.incbin "font-large-alpha.1bpp" read (8*9 - 6)*8 ; A-F plus 2 spaces except at end
+FontDataEnd:
 
 ColouredTileData:
-.incbin "sms-pro_action_replay.sms.colouredtiles.bin" fsize ColouredTileDataSize
+.incbin "coloured-tiles.bin" fsize ColouredTileDataSize
 .ends
 
-.section "Unused data? 2" force
+.section "More unused data" force
 ; 2d98
 .db $03 $03 $03 $03 $ff $ff $00 $ff
 .db $ff $ff $ff $00 $00 $00 $ff $ff
