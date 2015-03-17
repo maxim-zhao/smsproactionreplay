@@ -3,7 +3,7 @@ SMS Pro Action Replay
 
 Disassembly of the Master System Pro Action Replay.
 
-See http://www.smspower.org/htdocs/forums/viewtopic.php?t=13877 for discussion.
+See http://www.smspower.org/forums/viewtopic.php?t=13877 for discussion.
 
 To do
 -----
