@@ -14,9 +14,9 @@ slot 3 $c000
 .endme
 
 .rombankmap
-bankstotal 1
+bankstotal 2
 banksize $4000
-banks 1
+banks 2
 .endro
 
 
@@ -2957,7 +2957,7 @@ LoadTiles: ; 1bd3
   ret
 .ends
 
-.section "Flash border - unused" force
+.section "Flash border" force
 ; Flash border forever
 FlashBorder: ; 1c10
   ld b,0
@@ -3157,7 +3157,7 @@ DrawHexByte: ; 1ce9
   ret
 .ends
 
-.section "Draw hex word - unused" force
+.section "Draw hex word" force
 DrawHexWord: ; 1d0c
   push af
   push hl
@@ -3372,4 +3372,69 @@ ColouredTileData:
 .db $00
 .ends
 
-; Blank to end of ROM
+; Blank to $4000
+
+.bank 1 slot 1
+
+.orga $4035
+.section "4035" force
+_LABEL_4035_: 
+    ld ($6000), a ; Page ROM and fall through to it?
+_LABEL_4038_InterruptHandler: 
+    jp LABEL_4079_InterruptHandler
+  
+_LABEL_403B_: 
+    jp $0035
+.ends
+
+.orga $4066
+.section "NMI handler" force
+_LABEL_4066_: 
+    reti
+.ends
+
+.orga $4068
+.section "4068" force
+    exx
+      call ClearNameTable
+      setxy 2,2
+    exx
+    ld a, (TIMER_LAST_DELTA_BCD)
+LABEL_4079_InterruptHandler:
+    call DrawHexByte
+    ld a, ' '
+    call DrawTextChar
+    ld a, (TIMER_LAST_DELTA_HEX)
+    call DrawHexByte
+    ld a, ' '
+    call DrawTextChar
+    ld a, (TIMER_DELTA_BCD)
+    call DrawHexByte
+    ld a, ' '
+    call DrawTextChar
+    ld a, (TIMER_DELTA_HEX)
+    call DrawHexByte
+    ld a, ' '
+    call DrawTextChar
+    ld a, (hl)
+    call DrawHexByte
+    ld a, ' '
+    call DrawTextChar
+    call DrawHexWord
+    ld bc, $0203
+    ld (DRAW_XY), bc
+    call SetVRAMWriteAddressXY
+    ex de, hl
+    ld a, (hl)
+    call DrawHexByte
+    ld a, $20
+    call DrawTextChar
+    call DrawHexWord
+    jp FlashBorder
+.ends
+
+.section "ROM fill" force
+.repeat 16184
+.db $31 ; ld sp, $3131 - seems useless?
+.endr
+.ends
