@@ -55,7 +55,7 @@ banks 2
   Unused4                          dsb 28
   GENERATED_CODE                   dsb 25
   Unused5                          dsb 5
-  DRAW_XY                          dw
+  DRAW_XY                          dw      ; X, Y position for drawing
   CURSOR_TILE                      db
   CURSOR_X                         db      ; in tile space
   CURSOR_Y                         db      ; in tile space
@@ -86,12 +86,7 @@ banks 2
 .define INITIALISED_MARKER_VALUE $5742
 .define CREDITS_CODE $00c82606
 
-; Values for TRAINER_MODE
-.define MODE_LIVES $81
-.define MODE_TIMER $82
-.define MODE_ENERGYBAR $83
-.define MODE_STARTCHANGE $84
-
+; SMS hardware
 .define VDP_DATA $be
 .define VDP_STATUS $bf
 .define VDP_REGISTER $bf
@@ -99,17 +94,15 @@ banks 2
 .define PSG $7f
 .define IO_PORT_A $dc
 .define IO_PORT_B $dd
+.define MEMORY_CONTROL $3e
 
-.define BUTTON_U %00000001
-.define BUTTON_D %00000010
-.define BUTTON_L %00000100
-.define BUTTON_R %00001000
-.define BUTTON_1 %00010000
-.define BUTTON_2 %00100000
-.define BUTTON_RESET %01000000 ; Only for P2 inputs after shifting
-
-.define NEWLINE $0a
-.define STARTOFLINE $0d
+.define BUTTON_U      %00000001
+.define BUTTON_D      %00000010
+.define BUTTON_L      %00000100
+.define BUTTON_R      %00001000
+.define BUTTON_1      %00010000
+.define BUTTON_2      %00100000
+.define BUTTON_RESET  %01000000 ; Only for P2 inputs after shifting
 
 .define VRAM_WRITE $4000
 .define NAME_TABLE $3800
@@ -118,18 +111,38 @@ banks 2
 .define SRAM_START $c000
 .define SRAM_END SRAM_START + $2000
 
+; String handling
+.define NEWLINE $0a
+.define STARTOFLINE $0d
+
 .define PAR_REGISTER_SEARCHFORVALUE $0068 ; ?
+.define PAR_REGISTER_SWAP_DEVICE_AND_GAME $6000 ; Writes here seem to swap between PAR ROM/RAM and game ROM
+.define PAR_REGISTER_SWAP_ROM_BANKS $2000 ; Writes here seem to swap between the lower and upper 16KB of ROM when in PAR mode
+
+; Values for TRAINER_MODE
+.enum $81
+  MODE_LIVES        db ; $81
+  MODE_TIMER        db ; $82
+  MODE_ENERGYBAR    db ; $83
+  MODE_STARTCHANGE  db ; $84
+.ende
 
 ; Values for TRAINER_CHANGE_TYPE
-.define START_CHANGE_VALUE_IS_START $80
-.define START_CHANGE_VALUE_CHANGED  $81
-.define ENERGY_BAR_VALUE_IS_START   $80
-.define ENERGY_BAR_75_PERCENT       $81
-.define ENERGY_BAR_50_PERCENT       $82
-.define ENERGY_BAR_25_PERCENT       $83
+.enum $80
+  START_CHANGE_VALUE_IS_START db ; $80
+  START_CHANGE_VALUE_CHANGED  db ; $81
+.ende
 
+.enum $80
+  ENERGY_BAR_VALUE_IS_START   db ; $80
+  ENERGY_BAR_75_PERCENT       db ; $81
+  ENERGY_BAR_50_PERCENT       db ; $82
+  ENERGY_BAR_25_PERCENT       db ; $83
+.ende
 
 .define TIMER_MAX_DELTA $15 ; BCD
+
+; Macros for some common, repetitive code
 
 .macro ldhlxy args x,y
   ld hl, x << 8 | y
@@ -171,6 +184,7 @@ banks 2
 
 .org $10
 .section "rst $10" force
+WriteAToVDP:
   ; Write a to VDP (zero-extended)
   out (VDP_DATA), a
   push af
@@ -180,12 +194,10 @@ banks 2
   ret
   .dsb 8 $00 ; blank
 .ends
-.macro WriteAToVDP
-  rst $10
-.endm
 
 .org $20
 .section "rst $20" force
+SetVRAMAddressToDE:
   ; Set VDP address to de, also write VDP register d value e
   ; Trashes a
   ld a, e
@@ -195,18 +207,16 @@ banks 2
   ret
   .db $00 ; blank
 .ends
-.macro SetVRAMAddressToDE
-  rst $20
-.endm
 .macro SetVDPRegister args reg, value
   ld de, (reg << 8 | value) | $8000
-  rst $20
+  rst SetVRAMAddressToDE
 .endm
 
 .org $28
 .section "rst $28" force
+FillVRAM:
   ; Write l to VRAM bc times from address de
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
   ld a, c ; get count
   or a    ; if zero, increment b (because else the count will be wrong)
   jr nz, +
@@ -219,9 +229,6 @@ banks 2
   ret
   .db $00 ; blank
 .ends
-.macro FillVRAM
-  rst $28
-.endm
 
 .org $38
 .section "INT hander" force
@@ -2022,7 +2029,7 @@ _InputsEnd:
 
 UpdateEntryCursor: ; $1605
   ld de, SPRITE_TABLE | VRAM_WRITE
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
 
   ld a,(HEX_ENTRY_XY)        ; Get y
   sla a                     ; Convert to sprite coordinates (x8)
@@ -2031,7 +2038,7 @@ UpdateEntryCursor: ; $1605
   out (VDP_DATA),a          ; Set sprite Y
 
   ld de, SPRITE_TABLE | VRAM_WRITE + 128 ; Sprite X
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
 
   ld a,(HEX_ENTRY_XY + 1)    ; Get X
   ld e,a
@@ -2056,7 +2063,7 @@ _Loop: ; 1633
   call WaitForVBlank
   call GetInputs
   ld de, VRAM_WRITE | NAME_TABLE + 8 * 2 ; Draw position 8, 0
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
   ld a,(MENU_WAIT_FRAMES)
   or a
   jr z,+
@@ -2283,7 +2290,7 @@ _MenuLoop:
   ld d, a
   ex de, hl        ; ...into hl
   ld de, $7810     ; Name table address for 8, 0 ???
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
   jp (hl)          ; Jump to function
 
 ++:
@@ -2302,7 +2309,7 @@ _MenuLoop_End:
 
 _UpdateCursor: ; 17c3
   ld de, SPRITE_TABLE | VRAM_WRITE ; y[0]
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
   ld a, (CURSOR_Y)
   add a, (ix+1) ; + original value..?
   sla a         ; x 8 to get pixel coords
@@ -2310,7 +2317,7 @@ _UpdateCursor: ; 17c3
   sla a
   out (VDP_DATA), a  ; Y position
   ld de, SPRITE_TABLE | VRAM_WRITE + 128  ; sprite table: xn[0]
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
   ld a, (CURSOR_X)
   sla a         ; x8 to get pixel coords
   sla a
@@ -2348,7 +2355,7 @@ SetVRAMWriteAddressXY: ; 17ea
     ld de, NAME_TABLE | VRAM_WRITE
     add hl, de    ; add
     ex de, hl
-    SetVRAMAddressToDE
+    rst SetVRAMAddressToDE
   pop de
   pop hl
   ret
@@ -2391,7 +2398,7 @@ GenerateCode: ; 1814
 
   ld a, $f1    ; > pop af
   ld (ix+0),a
-  ld a, $c3    ; > jp $0035
+  ld a, $c3    ; > jp $0035 ; This is aligned to ReturnToGameInterruptHandler
   ld (ix+1),a
   ld a, $35
   ld (ix+2),a
@@ -2593,7 +2600,7 @@ DrawEntryCursor: ; 199a
   add a, 23       ; 48n + 23
   ld b,a
   ld de, SPRITE_TABLE | VRAM_WRITE
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
   ld a,b
   out (VDP_DATA),a ; Write 3 times
   push af
@@ -2617,7 +2624,7 @@ DrawEntryCursor: ; 199a
   ld b,a
   ld c,$57        ; Underscore tile
   ld de, SPRITE_TABLE | VRAM_WRITE + 128 ; Sprite X
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
   ld a,b          ; X
   out (VDP_DATA),a
   push af
@@ -2692,7 +2699,7 @@ DrawTextChar_ASCII:
     ld hl, AsciiToTilemapTable
     add hl, de   ; look up tile number
     ld a, (hl)
-    WriteAToVDP
+    rst WriteAToVDP
 
 DrawTextChar_Done:
   pop hl
@@ -2737,7 +2744,7 @@ DrawCodes: ; 1ab7
 .section "Palette loader" force
 LoadPalette: ; 1ad4
   ld de, $C000 ; Palette
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
   ld hl, PaletteData
   ld bc, (PaletteDataEnd - PaletteData) << 8 | VDP_DATA ; count (64 - GG?), dest
 -:outi
@@ -2774,7 +2781,7 @@ DrawCodeBackground: ; 1ae5
     xor a
     adc hl,de ; Set VRAM address to row 6 * a
     ex de,hl
-    SetVRAMAddressToDE
+    rst SetVRAMAddressToDE
   pop af
 
   ld b, 5 * 32 ; = 5 rows
@@ -2862,16 +2869,16 @@ DrawHexChar_3x3: ; 1b85
     ld c,$be - 3 * 10 ; Tile index for start of big 'A' - adjustment to look up 10 = 'A'
     ld (ix+0), 3 * 8 - 2 ; Delta to next row
 +:  ld b,a       ; Save value to draw
-    SetVRAMAddressToDE
+    rst SetVRAMAddressToDE
     ld a,b       ; n*3 + base
     sla a
     add a,b
     add a,c
-    WriteAToVDP
+    rst WriteAToVDP
     inc a        ; Plus the next two tiles
-    WriteAToVDP
+    rst WriteAToVDP
     inc a
-    WriteAToVDP
+    rst WriteAToVDP
 
     add a,(ix+0) ; Add delta to get to next row's tiles
 
@@ -2881,13 +2888,13 @@ DrawHexChar_3x3: ; 1b85
     ex de,hl
 
     ld b,a       ; Save a
-    SetVRAMAddressToDE
+    rst SetVRAMAddressToDE
     ld a,b
-    WriteAToVDP  ; Next row of tiles
+    rst WriteAToVDP  ; Next row of tiles
     inc a
-    WriteAToVDP
+    rst WriteAToVDP
     inc a
-    WriteAToVDP
+    rst WriteAToVDP
 
     ; Do it all again for the third row
     add a,(ix+0)
@@ -2896,13 +2903,13 @@ DrawHexChar_3x3: ; 1b85
     adc hl,de
     ex de,hl
     ld b,a
-    SetVRAMAddressToDE
+    rst SetVRAMAddressToDE
     ld a,b
-    WriteAToVDP
+    rst WriteAToVDP
     inc a
-    WriteAToVDP
+    rst WriteAToVDP
     inc a
-    WriteAToVDP
+    rst WriteAToVDP
   pop hl
   ld de,3 * 2    ; Move VRAM address right by 3 tiles
   xor a
@@ -2914,7 +2921,7 @@ DrawHexChar_3x3: ; 1b85
 .section "1bpp tile loader" force
 LoadTiles: ; 1bd3
   ld de, VRAM_WRITE | 0 ; VRAM address 0 - low tiles
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
   ld bc, FontDataEnd - FontData ; Count
   ld hl, FontData ; Address
 
@@ -2940,7 +2947,7 @@ LoadTiles: ; 1bd3
   djnz -
 
   ld de, VRAM_WRITE | (32 * 256) ; high tiles
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
   ld bc, ColouredTileDataSize
   ld hl, ColouredTileData
   ld a, c
@@ -2994,7 +3001,7 @@ DrawTestPattern1: ; 1c35
   ld c,b             ; c gets what was in b
   ld b,a             ; Not used
 -:push bc
-    WriteAToVDP
+    rst WriteAToVDP
     ex de,hl         ; Next row
     ld bc,32 * 2
     add hl,bc
@@ -3008,7 +3015,7 @@ CopyToVRAMWithMask: ; 1c45
   ; args: de = VRAM address, hl = pointer, a = bitmask, bc = counter
   ; Writes bc bytes from hl to VRAM address de; but uses a as a bitmask for each 4 bytes. 1 = use data, 0 = zero
   ld ($c201),a       ; Backup
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
 --:
   ld a,(hl)          ; Get value
   exx                ; Swap registers
@@ -3034,7 +3041,7 @@ CopyToVRAMWithMask: ; 1c45
 SpriteTestPattern: ; 1c64
   ; y coords = 4, 10, 16, ... for 32 sprites
   ld de,VRAM_WRITE | SPRITE_TABLE
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
   ld b,32            ; count
   ld a,4             ; initial value
 -:out (VDP_DATA),a
@@ -3045,7 +3052,7 @@ SpriteTestPattern: ; 1c64
 
   ; x, n = 4, 10, 16, ... for 32 sprites
   ld de,VRAM_WRITE | SPRITE_TABLE + 128
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
   ld b,32            ; count
   ld a,4             ; initial value
 -:out (VDP_DATA),a
@@ -3062,7 +3069,7 @@ BlankFirstTile: ; 1c89
   ld de,VRAM_WRITE | 0 ; start of VRAM
   ld bc,32           ; one tile
   ld l,0             ; Value
-  FillVRAM
+  rst FillVRAM
   ret
 .ends
 
@@ -3074,10 +3081,10 @@ ClearNameTable: ; 1c93
   ld de, NAME_TABLE | VRAM_WRITE
   ld bc, $0700 ; Size
   ld l, $00    ; Value to write
-  FillVRAM
+  rst FillVRAM
   ld de, NAME_TABLE | VRAM_WRITE ; Why?
-  SetVRAMAddressToDE
-  ld de, $0000
+  rst SetVRAMAddressToDE
+  ld de, $0000 ; 0, 0
   ld (DRAW_XY), de ; set text cursor position to 0,0
   ret
 .ends
@@ -3087,7 +3094,7 @@ ClearNameTable: ; 1c93
 DrawTestPattern2: ; 1cad
   ld de,NAME_TABLE | VRAM_WRITE
   ld bc,$0300 ; Count
-  SetVRAMAddressToDE
+  rst SetVRAMAddressToDE
 -:ld a,c      ; value
   cpl         ; ...inverted so it's incrementing
   out (VDP_DATA),a
@@ -3172,13 +3179,18 @@ DrawHexWord: ; 1d0c
 
 .section "RAM code: map to game and boot via BIOS" force
 MapToGameAndBoot_Slow: ; 1d19
-  ld ($6000),a    ; Mapper? What value?!?
-  ld ($2000),a    ; Mapper?
-  in a,($dc)      ; Not used - delay?
-  ld a,%11101011  ; Map in BIOS
-  out ($3e),a
-  ld a,%11100011
-  out ($3e),a
+  ld (PAR_REGISTER_SWAP_DEVICE_AND_GAME),a  ; Switch back to game ROM
+  ld (PAR_REGISTER_SWAP_ROM_BANKS),a        ; Enable "cheat application mode"
+  in a,(IO_PORT_A) ; Not used - delay?
+  ld a,%11101011   ; Disable cart ROM
+  ;        | `- I/O chip
+  ;        `--- System RAM
+  out (MEMORY_CONTROL),a
+  ld a,%11100011 ; Enable BIOS ROM
+  ;        ||`- I/O chip
+  ;        |`-- BIOS ROM
+  ;        `--- System RAM
+  out (MEMORY_CONTROL),a
   jp $0000
   nop
   nop
@@ -3188,9 +3200,9 @@ MapToGameAndBoot_SlowEnd:
 
 .section "RAM code: map to game and boot directly" force
 MapToGameAndBoot_Fast: ; 1d2f
-  ld ($6000),a
-  ld ($2000),a
-  jp $0000
+  ld (PAR_REGISTER_SWAP_DEVICE_AND_GAME),a  ; Switch back to game ROM
+  ld (PAR_REGISTER_SWAP_ROM_BANKS),a        ; Enable "cheat application mode"
+  jp $0000 ; start of game
   nop
   nop
   nop
@@ -3374,63 +3386,63 @@ ColouredTileData:
 
 ; Blank to $4000
 
-.bank 1 slot 1
+.bank 1 slot 0
 
-.orga $4035
-.section "4035" force
-_LABEL_4035_: 
-    ld ($6000), a ; Page ROM and fall through to it?
-_LABEL_4038_InterruptHandler: 
-    jp LABEL_4079_InterruptHandler
-  
-_LABEL_403B_: 
-    jp $0035
+; This bank seems to be mapped into the lower 16KB when cheats are active.
+
+.orga $0035
+.section "Cheat application INT handler" force
+ReturnToGameInterruptHandler: 
+  ld ($6000), a ; Page game ROM back in. This is jumped to from the generated code.
+  ; This is at $0038:
+  jp GENERATED_CODE
+  ; unreachable?
+  jp ReturnToGameInterruptHandler
 .ends
 
-.orga $4066
-.section "NMI handler" force
-_LABEL_4066_: 
-    reti
+.orga $0066
+.section "Cheat application NMI handler" force
+  reti
 .ends
 
-.orga $4068
-.section "4068" force
-    exx
-      call ClearNameTable
-      setxy 2,2
-    exx
-    ld a, (TIMER_LAST_DELTA_BCD)
-LABEL_4079_InterruptHandler:
-    call DrawHexByte
-    ld a, ' '
-    call DrawTextChar
-    ld a, (TIMER_LAST_DELTA_HEX)
-    call DrawHexByte
-    ld a, ' '
-    call DrawTextChar
-    ld a, (TIMER_DELTA_BCD)
-    call DrawHexByte
-    ld a, ' '
-    call DrawTextChar
-    ld a, (TIMER_DELTA_HEX)
-    call DrawHexByte
-    ld a, ' '
-    call DrawTextChar
-    ld a, (hl)
-    call DrawHexByte
-    ld a, ' '
-    call DrawTextChar
-    call DrawHexWord
-    ld bc, $0203
-    ld (DRAW_XY), bc
-    call SetVRAMWriteAddressXY
-    ex de, hl
-    ld a, (hl)
-    call DrawHexByte
-    ld a, $20
-    call DrawTextChar
-    call DrawHexWord
-    jp FlashBorder
+.orga $0068
+.section "Unused debug helper" force
+; 4048 unused - when mapped to the lower 16KB these function calls will fail anyway.
+  exx
+    call ClearNameTable
+    setxy 2,2
+  exx
+  ld a, (TIMER_LAST_DELTA_BCD)
+  call DrawHexByte
+  ld a, ' '
+  call DrawTextChar
+  ld a, (TIMER_LAST_DELTA_HEX)
+  call DrawHexByte
+  ld a, ' '
+  call DrawTextChar
+  ld a, (TIMER_DELTA_BCD)
+  call DrawHexByte
+  ld a, ' '
+  call DrawTextChar
+  ld a, (TIMER_DELTA_HEX)
+  call DrawHexByte
+  ld a, ' '
+  call DrawTextChar
+  ld a, (hl)
+  call DrawHexByte
+  ld a, ' '
+  call DrawTextChar
+  call DrawHexWord
+  ld bc, $0203 ; 2, 3
+  ld (DRAW_XY), bc
+  call SetVRAMWriteAddressXY
+  ex de, hl
+  ld a, (hl)
+  call DrawHexByte
+  ld a, ' '
+  call DrawTextChar
+  call DrawHexWord
+  jp FlashBorder
 .ends
 
 .section "ROM fill" force
