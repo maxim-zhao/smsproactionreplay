@@ -17,7 +17,7 @@ There is a switch on the side of the PAR device. This has three positions which 
 
 - In the upper position, game cheats are enabled. The PAL seems to then enable the PAR RAM/ROM whenever address $0038 is read/executed (perhaps by treating it the same as $2000). This causes interception of the frame (and line) interrupts, and the device ROM is executed at this address. This jumps to some generated code in PAR RAM which applies any active cheats and then re-enables the game ROM, such that execution flows into its interrupt handler. Thus it may cause timing problems in some games.
 - In the middle position, this interception is disabled.
-- In the lower position, the interception is enabled but the ROM bank selection is set to the first 16KB, which causes the next interrupt to instead flow to the PAR menu the same as at startup.
+- In the lower position, the device will jump to the game menu when Pause is pressed. Presumably this means that read/execute of $0066 triggers a selection of the PAR ROM/RAM again (similar to intercepting $0038 above). My best guess is that this also triggers a selection of the first 16KB bank of PAR ROM, as well as interception of $0038 as in the upper position; this lower 16KB will simply jump to the start of its ROM when a frame/line interrupt happens.
 
 To do
 -----
