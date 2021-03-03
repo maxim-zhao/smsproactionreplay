@@ -116,8 +116,8 @@ banks 2
 .define STARTOFLINE $0d
 
 .define PAR_REGISTER_SEARCHFORVALUE $0068 ; ?
-.define PAR_REGISTER_SWAP_DEVICE_AND_GAME $6000 ; Writes here seem to swap between PAR ROM/RAM and game ROM
-.define PAR_REGISTER_SWAP_ROM_BANKS $2000 ; Writes here seem to swap between the lower and upper 16KB of ROM when in PAR mode
+.define PAR_REGISTER_ENABLE_GAME_ROM $6000 ; Writes here force the device to enable the game ROM, not its ROM/RAM
+.define PAR_REGISTER_ENABLE_UPPER_ROM_BANK $2000 ; Writes here force the upper 16KB of PAR ROM to be used
 
 ; Values for TRAINER_MODE
 .enum $81
@@ -232,6 +232,9 @@ FillVRAM:
 
 .org $38
 .section "INT hander" force
+  ; This is used to jump to the menu. The lower 16KB is only enabled when the switch is in the lower position, 
+  ; and it is enabled instead of the cart ROM when the Pause button is pressed and when a regular interrupt happens.
+  ; If the NMI handler jumped to 0 itself, it'
   jp 0
 .ends
 
@@ -3179,8 +3182,8 @@ DrawHexWord: ; 1d0c
 
 .section "RAM code: map to game and boot via BIOS" force
 MapToGameAndBoot_Slow: ; 1d19
-  ld (PAR_REGISTER_SWAP_DEVICE_AND_GAME),a  ; Switch back to game ROM
-  ld (PAR_REGISTER_SWAP_ROM_BANKS),a        ; Enable "cheat application mode"
+  ld (PAR_REGISTER_ENABLE_GAME_ROM),a         ; Switch back to game ROM
+  ld (PAR_REGISTER_ENABLE_UPPER_ROM_BANK),a   ; Enable "cheat application mode"
   in a,(IO_PORT_A) ; Not used - delay?
   ld a,%11101011   ; Disable cart ROM
   ;        | `- I/O chip
@@ -3200,8 +3203,8 @@ MapToGameAndBoot_SlowEnd:
 
 .section "RAM code: map to game and boot directly" force
 MapToGameAndBoot_Fast: ; 1d2f
-  ld (PAR_REGISTER_SWAP_DEVICE_AND_GAME),a  ; Switch back to game ROM
-  ld (PAR_REGISTER_SWAP_ROM_BANKS),a        ; Enable "cheat application mode"
+  ld (PAR_REGISTER_ENABLE_GAME_ROM),a         ; Switch back to game ROM
+  ld (PAR_REGISTER_ENABLE_UPPER_ROM_BANK),a   ; Enable "cheat application mode"
   jp $0000 ; start of game
   nop
   nop
@@ -3393,7 +3396,7 @@ ColouredTileData:
 .orga $0035
 .section "Cheat application INT handler" force
 ReturnToGameInterruptHandler: 
-  ld ($6000), a ; Page game ROM back in. This is jumped to from the generated code.
+  ld (PAR_REGISTER_ENABLE_GAME_ROM), a ; Page game ROM back in. This is jumped to from the generated code.
   ; This is at $0038:
   jp GENERATED_CODE
   ; unreachable?
